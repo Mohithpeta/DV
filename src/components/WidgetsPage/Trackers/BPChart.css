@@ -1,0 +1,97 @@
+.container {
+    width: 80%;
+    margin: 0 auto;
+    text-align: center;
+}
+
+.input-form {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.input-form div {
+    margin: 10px 0;
+}
+
+.input-form label {
+    margin-right: 10px;
+}
+
+.input-form input {
+    padding: 5px;
+    width: 200px;
+    box-sizing: border-box;
+}
+
+.input-form button {
+    padding: 10px 20px;
+    background-color: #4CAF50;
+    border: none;
+    color: white;
+    cursor: pointer;
+    margin-top: 10px;
+}
+
+.input-form button:hover {
+    background-color: #45a049;
+}
+
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: 20px;
+}
+
+.pagination button {
+    padding: 10px 20px;
+    margin: 0 10px;
+    background-color: #008CBA;
+    border: none;
+    color: white;
+    cursor: pointer;
+}
+
+.pagination button:hover {
+    background-color: #007bb5;
+}
+
+.pagination button:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+
+.pagination span {
+    font-size: 16px;
+    margin: 0 10px;
+}
+
+.inputarea {
+    padding: 5px;
+    margin: 1%;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #ccc;
+    box-sizing:border-box;
+    max-width: fit-content;
+    justify-content: left;
+}
+
+.label {
+    display: flex;
+    flex-direction: row;
+    text-align: center;
+    justify-content: left;
+    align-items: center;
+}
+
+.chart-container {
+    position: relative;
+    margin: 20px 0;
+    width: 100%;
+    max-width: 800px;
+    height: 400px;
+    margin: 0 auto;
+}

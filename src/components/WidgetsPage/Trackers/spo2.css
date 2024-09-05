@@ -1,0 +1,47 @@
+.container {
+  width: 80%;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.input-form {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.input-form div {
+  margin: 10px 0;
+}
+
+.input-form label {
+  margin-right: 10px;
+}
+
+.input-form input {
+  padding: 5px;
+  width: 200px;
+  box-sizing: border-box;
+}
+
+.input-form button {
+  padding: 10px 20px;
+  background-color: #4CAF50;
+  border: none;
+  color: white;
+  cursor: pointer;
+  margin-top: 10px;
+}
+
+.input-form button:hover {
+  background-color: #45a049;
+}
+
+.chart-container {
+  position: relative;
+  margin: 20px 0;
+  width: 100%;
+  height: 400px;
+  max-width: 800px;
+}
