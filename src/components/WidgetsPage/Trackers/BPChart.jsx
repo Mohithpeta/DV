@@ -24,37 +24,47 @@ const BloodPressureChart = () => {
     setLoading(true);
     try {
       const response = await axios.get(`http://localhost:5000/api/bloodpressure?page=${page}&limit=${limit}`);
-      const data = response.data;
+      const responseData = response.data;
 
-      const systolicValues = data.map(item => item.systolic);
-      const diastolicValues = data.map(item => item.diastolic);
-      const timeStamps = data.map(item => new Date(item.timestamp).toLocaleString());
+      console.log('Fetched Data:', responseData); // Inspect the data structure
 
-      setChartData({
-        labels: timeStamps,
-        datasets: [
-          {
-            label: 'Systolic Pressure',
-            data: systolicValues,
-            borderColor: '#ff6384',
-            backgroundColor: 'rgba(255, 99, 132, 0.2)',
-            fill: true,
-            tension: 0.4
-          },
-          {
-            label: 'Diastolic Pressure',
-            data: diastolicValues,
-            borderColor: '#36a2eb',
-            backgroundColor: 'rgba(54, 162, 235, 0.2)',
-            fill: true,
-            tension: 0.4
-          }
-        ]
-      });
+      // Extract the data array from the response object
+      const data = responseData.data;
 
-      // Calculate total pages based on total count
-      const totalCount = parseInt(response.headers['x-total-count']);
-      setTotalPages(Math.ceil(totalCount / limit));
+      if (Array.isArray(data)) {
+        const systolicValues = data.map(item => item.systolic);
+        const diastolicValues = data.map(item => item.diastolic);
+        const timeStamps = data.map(item => new Date(item.timestamp).toLocaleString());
+
+        setChartData({
+          labels: timeStamps,
+          datasets: [
+            {
+              label: 'Systolic Pressure',
+              data: systolicValues,
+              borderColor: '#ff6384',
+              backgroundColor: 'rgba(255, 99, 132, 0.2)',
+              fill: true,
+              tension: 0.4
+            },
+            {
+              label: 'Diastolic Pressure',
+              data: diastolicValues,
+              borderColor: '#36a2eb',
+              backgroundColor: 'rgba(54, 162, 235, 0.2)',
+              fill: true,
+              tension: 0.4
+            }
+          ]
+        });
+
+        // Calculate total pages based on total count
+        const totalCount = responseData.totalEntries;
+        setTotalPages(Math.ceil(totalCount / limit));
+
+      } else {
+        throw new Error('Data is not an array');
+      }
 
       setLoading(false);
     } catch (error) {
@@ -79,9 +89,7 @@ const BloodPressureChart = () => {
       setNewDiastolic('');
       setNewTimestamp('');
 
-      // Refresh data to include the newly added entry
       fetchData(page);
-
     } catch (error) {
       console.error("There was an error submitting the data!", error);
       setError('Error submitting data');
@@ -100,97 +108,41 @@ const BloodPressureChart = () => {
     }
   };
 
-  if (loading) {
-    return <p>Loading data...</p>;
-  }
-
-  if (error) {
-    return <p>{error}</p>;
-  }
-
   return (
-    <div className="container">
-      <h1>Blood Pressure Tracking</h1>
-      {chartData ? (
-        <Line 
-          data={chartData}
-          options={{
-            scales: {
-              x: {
-                title: {
-                  display: true,
-                  text: 'Date/Time',
-                  color: '#666'
-                }
-              },
-              y: {
-                beginAtZero: false,
-                title: {
-                  display: true,
-                  text: 'Blood Pressure (mmHg)',
-                  color: '#666'
-                },
-                ticks: {
-                  callback: function(value) {
-                    return value + ' mmHg';
-                  }
-                }
-              }
-            },
-            plugins: {
-              legend: {
-                position: 'top',
-                labels: {
-                  color: '#333'
-                }
-              },
-              tooltip: {
-                mode: 'index',
-                intersect: false
-              }
-            },
-            maintainAspectRatio: true
-          }}
-        />
-      ) : (
-        <p>No data available</p>
+    <div className="bp-chart-container">
+      {loading && <p>Loading...</p>}
+      {error && <p>{error}</p>}
+      {chartData && (
+        <>
+          <Line data={chartData} />
+          <button onClick={handlePrevious} disabled={page <= 1}>Previous</button>
+          <button onClick={handleNext} disabled={page >= totalPages}>Next</button>
+        </>
       )}
-
-      <form onSubmit={handleSubmit} className="form">
-        <label className='label'>
-          Systolic Pressure:
-          <input 
-            type="number" 
-            value={newSystolic}
-            onChange={(e) => setNewSystolic(e.target.value)}
-            required className='inputarea'
-          />
-        </label>
-        <label className='label'>
-          Diastolic Pressure:
-          <input 
-            type="number" 
-            value={newDiastolic}
-            onChange={(e) => setNewDiastolic(e.target.value)}
-            required className='inputarea'
-          />
-        </label>
-        <label className='label'>
-          Timestamp:
-          <input 
-            type="datetime-local" 
-            value={newTimestamp}
-            onChange={(e) => setNewTimestamp(e.target.value)}
-            required className='inputarea'
-          />
-        </label>
-        <button type="submit">Submit</button>
+      <form onSubmit={handleSubmit} className="bp-form">
+        <input
+          type="number"
+          value={newSystolic}
+          onChange={(e) => setNewSystolic(e.target.value)}
+          placeholder="Systolic Pressure"
+          required
+        />
+        <input
+          type="number"
+          value={newDiastolic}
+          onChange={(e) => setNewDiastolic(e.target.value)}
+          placeholder="Diastolic Pressure"
+          required
+        />
+        <input
+          type="datetime-local"
+          value={newTimestamp}
+          onChange={(e) => setNewTimestamp(e.target.value)}
+          placeholder="Timestamp"
+          required
+        />
+        <button type="submit">Add Entry</button>
       </form>
-
-      <div className="navigation">
-        <button onClick={handlePrevious} disabled={page === 1}>Previous</button>
-        <button onClick={handleNext} disabled={page === totalPages}>Next</button>
-      </div>
     </div>
   );
 };

@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import styled from "styled-components";
 import { Link } from "react-router-dom";
 import axios from "axios";
-import WidgetsPage from "../WidgetsPage/WidgetsPage.jsx";
+import WidgetsPage from "../WidgetsPage/WidgetsHomePage.jsx";
 
 
 const Signin = () => {

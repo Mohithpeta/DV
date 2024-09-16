@@ -3,10 +3,11 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import HomePage from './components/HomePage';
 import Signin from './components/Signinup/Signin'; 
 import Signup from './components/Signinup/Signup';// Import SignIn component
-import WidgetsPage from './components/WidgetsPage/WidgetsPage.jsx';
+import WidgetsPage from './components/WidgetsPage/WidgetsHomePage.jsx';
 import BloodPressureChart from './components/WidgetsPage/Trackers/BPChart.jsx';
 import TrackersPage from './components/WidgetsPage/TrackersPage.jsx';
 import SpO2Chart from './components/WidgetsPage/Trackers/spo2.jsx';
+import WeightChart from './components/WidgetsPage/Trackers/WeightChart.jsx';
 
 
 const App = () => {
@@ -20,6 +21,7 @@ const App = () => {
         <Route path="/TrackersPage" element={<TrackersPage />} />
         <Route path="/BloodPressureChart" element={<BloodPressureChart />} />
         <Route path="/spo2" element={<SpO2Chart />} />
+        <Route path="/WeightChart" element={<WeightChart />} />
         {/* Add more routes here if needed */}
       </Routes>
     </Router>

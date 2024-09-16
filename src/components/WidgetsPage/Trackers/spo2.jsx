@@ -30,7 +30,7 @@ const SpO2Chart = () => {
 
   useEffect(() => {
     // Fetch initial data from backend API
-    axios.get('http://localhost:5001/api/spo2')
+    axios.get('http://localhost:5000/api/spo2')
       .then(response => {
         const data = response.data;
         setSpO2Data(data);
@@ -48,7 +48,7 @@ const SpO2Chart = () => {
     event.preventDefault();
 
     if (newSpO2 && timestamp) {
-      axios.post('http://localhost:5001/api/spo2', {
+      axios.post('http://localhost:5000/api/spo2', {
         spO2: newSpO2,
         timestamp: new Date(timestamp).toISOString()
       })
