@@ -1,220 +1,275 @@
+require('dotenv').config(); // Load environment variables from .env file
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const bodyParser = require('body-parser');
-const passport = require('passport');
-const cookieSession = require('cookie-session');
-const GoogleStrategy = require('passport-google-oauth20').Strategy;
-const User = require('./models/User'); // Assuming you have a User model
+const http = require('http');
+const { Server } = require('socket.io');
+const passport = require('./passport');
+const session = require('express-session');
+const { OAuth2Client } = require('google-auth-library');
+const jwt = require('jsonwebtoken');
+const { check, validationResult } = require('express-validator');
 
-// Create an Express application
+// Google Client ID
+const client = new OAuth2Client(process.env.CLIENT_ID);
+
+// User model
+const User = require('./models/User');
+const BloodPressure = require('./models/BloodPressure');
+const SpO2 = require('./models/SpO2');
+const Weight = require('./models/WeightData');
+
+// Initialize express app
 const app = express();
 
-// Middleware
-app.use(cors());
+// Create HTTP server and initialize socket.io
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: 'http://localhost:5173',
+    methods: ['GET', 'POST'],
+    credentials: true,
+  },
+});
+
+// Middleware setup
+app.use(cors({
+  origin: 'http://localhost:5173',
+  credentials: true,
+}));
 app.use(bodyParser.json());
 
-// Cookie-session middleware (for session management)
-app.use(cookieSession({
-  maxAge: 24 * 60 * 60 * 1000, // 1 day
-  keys: ['YOUR_COOKIE_KEY'] // Use a secure key
+// Secure session handling with cookies
+app.use(session({
+  secret: process.env.JWT_SECRET,
+  resave: false,
+  saveUninitialized: true,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: 3600000 // 1 hour expiration
+  },
 }));
 
 app.use(passport.initialize());
 app.use(passport.session());
 
-// MongoDB connection (single connection for all components)
-const mongoURI = 'mongodb://localhost:27017/healthdata'; // Use a single MongoDB database for all components
-mongoose.connect(mongoURI, {
+// MongoDB connection
+mongoose.connect(process.env.MONGO_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 }).then(() => console.log('MongoDB connected'))
-  .catch(err => console.log('MongoDB connection error:', err));
+  .catch(err => console.error('MongoDB connection error:', err));
 
-// ----------- Google OAuth2 Setup ------------
-passport.use(new GoogleStrategy({
-  clientID: 'YOUR_GOOGLE_CLIENT_ID',
-  clientSecret: 'YOUR_GOOGLE_CLIENT_SECRET',
-  callbackURL: '/auth/google/callback'
-}, async (accessToken, refreshToken, profile, done) => {
-  const existingUser = await User.findOne({ googleId: profile.id });
-  if (existingUser) {
-    return done(null, existingUser);
-  }
-  const newUser = await new User({ googleId: profile.id }).save();
-  done(null, newUser);
-}));
-
-passport.serializeUser((user, done) => {
-  done(null, user.id);
-});
-
-passport.deserializeUser(async (id, done) => {
-  const user = await User.findById(id);
-  done(null, user);
-});
-
-// ----------- Authentication Routes ------------
-app.get('/auth/google', passport.authenticate('google', {
-  scope: ['profile']
-}));
-
-app.get('/auth/google/callback',
-  passport.authenticate('google'),
-  (req, res) => {
-    res.redirect('/dashboard'); // Redirect to dashboard or any protected route
-  }
-);
-
-app.get('/logout', (req, res) => {
-  req.logout();
-  res.redirect('/');
-});
-
-app.get('/api/current_user', (req, res) => {
-  res.send(req.user);
-});
-
-// Middleware to check authentication for protected routes
+// Authentication Middleware
 const requireAuth = (req, res, next) => {
-  if (!req.user) {
-    return res.status(403).send('You must log in!');
-  }
-  next();
+  const authHeader = req.headers.authorization;
+  if (!authHeader) return res.status(401).send('Unauthorized');
+  
+  const token = authHeader.split(' ')[1];
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+    if (err) return res.status(403).send('Forbidden');
+    req.user = user;
+    next();
+  });
 };
 
-// ----------- Blood Pressure Component ------------
-const bloodPressureSchema = new mongoose.Schema({
-  systolic: Number,
-  diastolic: Number,
-  timestamp: String,
+// Function to create a JWT token for the user
+const createTokenForUser = (user) => {
+  return jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+};
+
+// Google Sign-Up route
+app.post('/api/auth/google/signup', async (req, res) => {
+  const { id_token } = req.body;
+
+  try {
+    const ticket = await client.verifyIdToken({
+      idToken: id_token,
+      audience: process.env.CLIENT_ID,
+    });
+    const payload = ticket.getPayload();
+    const { email, name } = payload;
+
+    let user = await User.findOne({ email });
+    if (user) {
+      return res.status(400).json({ error: 'User already exists. Please log in instead.' });
+    }
+
+    user = new User({ fullname: name, email });
+    await user.save();
+
+    req.login(user, (err) => {
+      if (err) {
+        return res.status(500).json({ error: 'Error logging in: ' + err.message });
+      }
+      const token = createTokenForUser(user);
+      res.status(201).json({ message: 'Signed up successfully', accessToken: token, user });
+    });
+  } catch (error) {
+    console.error('Error during Google Sign-Up:', error);
+    res.status(400).json({ error: 'Invalid Google token: ' + error.message });
+  }
 });
 
-const BloodPressure = mongoose.model('BloodPressure', bloodPressureSchema);
+// Google Login route
+app.post('/api/auth/google/login', async (req, res) => {
+  const { idToken } = req.body;
 
-// POST: Add a new blood pressure entry (Protected)
-app.post('/api/bloodpressure', requireAuth, async (req, res) => {
-  const bloodPressure = new BloodPressure(req.body);
+  try {
+    const ticket = await client.verifyIdToken({
+      idToken,
+      audience: process.env.CLIENT_ID,
+    });
+    const payload = ticket.getPayload();
+    const { email, name } = payload;
+
+    let user = await User.findOne({ email });
+    if (!user) {
+      user = new User({ fullname: name, email });
+      await user.save();
+    }
+
+    req.login(user, (err) => {
+      if (err) {
+        return res.status(500).json({ error: 'Error logging in: ' + err.message });
+      }
+      const token = createTokenForUser(user);
+      res.status(200).json({ message: 'Logged in successfully', accessToken: token, user });
+    });
+  } catch (error) {
+    console.error('Error during Google Login:', error);
+    res.status(400).json({ error: 'Invalid Google token: ' + error.message });
+  }
+});
+
+// Logout route
+app.post('/api/logout', (req, res) => {
+  req.logout((err) => {
+    if (err) {
+      return res.status(500).json({ error: 'Error logging out: ' + err.message });
+    }
+    res.status(200).json({ message: 'Logged out successfully' });
+  });
+});
+
+// Blood pressure POST route
+app.post('/api/bloodpressure', [
+  check('systolic').isNumeric().withMessage('Systolic value must be numeric'),
+  check('diastolic').isNumeric().withMessage('Diastolic value must be numeric')
+], requireAuth, async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
+
+  const { systolic, diastolic, timestamp } = req.body;
+  const bloodPressure = new BloodPressure({
+    systolic,
+    diastolic,
+    timestamp: timestamp ? new Date(timestamp) : new Date(),
+  });
+
   try {
     await bloodPressure.save();
     res.status(201).send(bloodPressure);
+    io.emit('newBloodPressure', bloodPressure);  // Emit real-time updates to frontend
   } catch (error) {
-    res.status(400).send(error);
+    res.status(400).send('Error saving blood pressure entry: ' + error.message);
   }
 });
 
-// GET: Retrieve blood pressure data (with pagination)
-app.get('/api/bloodpressure', async (req, res) => {
-  const { page = 1, limit = 10 } = req.query;
+// Blood pressure GET route
+app.get('/api/bloodpressure', requireAuth, async (req, res) => {
+  const page = parseInt(req.query.page, 10) || 1;
+  const limit = parseInt(req.query.limit, 10) || 10;
+  const skip = (page - 1) * limit;
 
   try {
-    const data = await BloodPressure.find()
-      .sort({ timestamp: 1 }) // Sort by timestamp in ascending order
-      .skip((page - 1) * limit)
-      .limit(parseInt(limit));
-
     const totalEntries = await BloodPressure.countDocuments();
-    const hasMore = page * limit < totalEntries;
+    const data = await BloodPressure.find()
+      .sort({ timestamp: 1 })
+      .skip(skip)
+      .limit(limit);
 
-    res.status(200).json({ data, currentPage: page, totalEntries, hasMore });
+    res.set('x-total-count', totalEntries);
+    res.status(200).json({
+      data,
+      currentPage: page,
+      totalEntries,
+      hasMore: page * limit < totalEntries,
+    });
   } catch (error) {
-    res.status(500).send(error);
+    res.status(500).send('Error retrieving blood pressure data: ' + error.message);
   }
 });
 
-// ----------- SpO2 Component ------------
-const spo2Schema = new mongoose.Schema({
-  spO2: Number,
-  timestamp: Date,
-});
+// SpO2 POST route
+app.post('/api/spo2', [
+  check('spO2').isNumeric().withMessage('SpO2 value must be numeric')
+], requireAuth, async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
 
-const SpO2 = mongoose.model('SpO2', spo2Schema);
-
-// POST: Add a new SpO2 entry (Protected)
-app.post('/api/spo2', requireAuth, async (req, res) => {
   const { spO2, timestamp } = req.body;
-  const newSpO2 = new SpO2({ spO2, timestamp });
+  const newSpO2 = new SpO2({ spO2, timestamp: timestamp ? new Date(timestamp) : new Date() });
+
   try {
     await newSpO2.save();
     res.status(201).json(newSpO2);
+    io.emit('newSpO2', newSpO2);  // Emit real-time updates to frontend
   } catch (error) {
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: 'Error saving SpO2 data: ' + error.message });
   }
 });
 
-// GET: Retrieve SpO2 data
-app.get('/api/spo2', async (req, res) => {
+// SpO2 GET route
+app.get('/api/spo2', requireAuth, async (req, res) => {
   try {
     const spo2Data = await SpO2.find().sort({ timestamp: 1 });
     res.json(spo2Data);
   } catch (err) {
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: 'Error retrieving SpO2 data: ' + err.message });
   }
 });
 
-// ----------- Weight Chart Component ------------
-const weightSchema = new mongoose.Schema({
-  weight: Number,
-  day: String,
-  timestamp: String,
-});
-
-const Weight = mongoose.model('Weight', weightSchema);
-
-// GET: Fetch weight data
-app.get('/api/weightdata', async (req, res) => {
-  try {
-    const weights = await Weight.find().sort({ timestamp: 1 });
-    res.json(weights);
-  } catch (error) {
-    res.status(500).json({ error: 'Error fetching data' });
+// Weight POST route
+app.post('/api/weight', [
+  check('weight').isNumeric().withMessage('Weight value must be numeric'),
+  check('day').isString().withMessage('Day must be a string')
+], requireAuth, async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
   }
-});
 
-// POST: Add new weight data (Protected)
-app.post('/api/weight', requireAuth, async (req, res) => {
   const { weight, day, timestamp } = req.body;
-  if (!weight || !day) {
-    return res.status(400).json({ error: 'Weight and day are required' });
-  }
+  const newWeight = new Weight({ weight, day, timestamp: timestamp ? new Date(timestamp) : new Date() });
 
   try {
-    const newWeight = new Weight({ weight, day, timestamp });
     await newWeight.save();
-    res.json(newWeight);
+    res.status(201).json(newWeight);
+    io.emit('newWeight', newWeight);  // Emit real-time updates to frontend
   } catch (error) {
-    res.status(500).json({ error: 'Error saving data' });
+    res.status(500).json({ error: 'Error saving weight data: ' + error.message });
   }
 });
 
-// POST: Insert sample data if none exists (Protected)
-app.post('/api/sampledata', requireAuth, async (req, res) => {
+// Weight GET route
+app.get('/api/weight', requireAuth, async (req, res) => {
   try {
-    const existingData = await Weight.find();
-
-    if (existingData.length === 0) {
-      const sampleData = [
-        { weight: 70, day: 'Mon', timestamp: '2024-09-09T00:00:00Z' },
-        { weight: 72, day: 'Tue', timestamp: '2024-09-10T00:00:00Z' },
-        { weight: 71, day: 'Wed', timestamp: '2024-09-11T00:00:00Z' },
-        { weight: 69, day: 'Thu', timestamp: '2024-09-12T00:00:00Z' },
-        { weight: 68, day: 'Fri', timestamp: '2024-09-13T00:00:00Z' },
-        { weight: 70, day: 'Sat', timestamp: '2024-09-14T00:00:00Z' },
-        { weight: 71, day: 'Sun', timestamp: '2024-09-15T00:00:00Z' }
-      ];
-
-      await Weight.insertMany(sampleData);
-      res.status(201).json({ message: 'Sample data inserted successfully' });
-    } else {
-      res.status(200).json({ message: 'Sample data already exists' });
-    }
-  } catch (error) {
-    res.status(500).json({ error: 'Error inserting sample data' });
+    const weightData = await Weight.find().sort({ timestamp: 1 });
+    res.json(weightData);
+  } catch (err) {
+    res.status(500).json({ error: 'Error retrieving weight data: ' + err.message });
   }
 });
 
-// Start the server on a single port
-const PORT = 5000;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+// Listen on specified port
+const PORT = process.env.PORT || 5000;
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
