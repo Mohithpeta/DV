@@ -6,41 +6,44 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "postinstall": "npx npm-force-resolutions",
+    "lint": "standard"
   },
   "dependencies": {
     "@react-oauth/google": "^0.12.1",
     "axios": "^1.7.7",
+    "bcryptjs": "^2.4.3",
     "chart.js": "^4.4.4",
-    "express": "^4.21.0",
+    "dotenv": "^16.4.5",
+    "esbuild": "^0.23.1",
+    "google-auth-library": "^9.14.1",
+    "grep": "^0.1.0",
+    "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.344.0",
+    "node": "^22.8.0",
     "react": "^18.2.0",
     "react-chartjs-2": "^5.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.26.1",
+    "send": "^0.19.0",
+    "socket.io": "^4.7.5",
+    "socket.io-client": "^4.7.5",
     "styled-components": "^6.1.13",
-    "tailwind": "^4.0.0",
     "typesense": "^1.8.2",
     "virtualr": "file:",
-    "ws": "^7.4.6"
+    "yup": "^1.4.0"
   },
+  "resolutions": {},
   "devDependencies": {
-    "@types/react": "^18.2.56",
+    "@types/react": "^18.3.6",
     "@types/react-dom": "^18.2.19",
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.18",
-    "eslint": "^8.57.0",
-    "eslint-plugin-react": "^7.36.1",
-    "eslint-plugin-react-hooks": "^4.6.2",
-    "eslint-plugin-react-refresh": "^0.4.5",
+    "npm-force-resolutions": "^0.0.10",
     "postcss": "^8.4.35",
+    "standard": "^17.1.2",
     "tailwindcss": "^3.4.1",
     "vite": "^5.1.4"
-  },
-  "description": "This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.",
-  "main": "eslint.config.js",
-  "keywords": [],
-  "author": "",
-  "license": "ISC"
+  }
 }
